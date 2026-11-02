@@ -238,3 +238,63 @@ def test_single_unrelated_counter_event_can_end_settle_before_actual_statistics(
         assert coordinator.last_statistics_sync_snapshot_changed is True
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("session", ["own", "foreign", "unverified"])
+def test_real_session_guard_protects_the_new_statistics_frame(session):
+    async def scenario():
+        coordinator, client = _coordinator("DL-striker-cb")
+        coordinator.connected_property = "app_device_connected"
+        coordinator.has_device_signature = lambda: True
+        coordinator.monitor = {"status": 0, "step": 2}
+        coordinator._integration_app_id = 0x11223344
+        coordinator._last_connect_at = cm.monotonic()
+        client.app_id = 0x11223344 if session == "own" else 0x55667788
+        if session == "unverified":
+            coordinator._fetch_app_id_live = AsyncMock(return_value=(None, False))
+        coordinator._statistics_update_event.wait = AsyncMock()
+        coordinator.async_request_refresh = AsyncMock()
+        result = await coordinator.async_synchronize_statistics(automatic=True)
+        if session == "own":
+            assert result == "completed_unverified"
+            assert len(client.writes) == 1
+            raw = base64.b64decode(client.writes[0][2], validate=True)
+            assert raw[:9] == bytes.fromhex("0d 06 e8 f0 00 ed 7c 00 00")
+            assert raw[-4:] == bytes.fromhex("11 22 33 44")
+        else:
+            assert result == ("skipped_foreign_session" if session == "foreign" else "failed")
+            assert client.writes == []
+        assert client.connect_posts == 0
+        assert coordinator.last_command_result is None
+
+    asyncio.run(scenario())
+
+
+def test_cancelling_inflight_finish_refresh_releases_locks_and_allows_retry(monkeypatch):
+    async def scenario():
+        coordinator, _client = _coordinator("DL-striker-cb")
+        coordinator.connected_property = "app_device_connected"
+        coordinator.has_device_signature = lambda: True
+        coordinator.monitor = {"status": 7, "step": 0}
+        started = asyncio.Event()
+
+        async def blocked_session(_send):
+            started.set()
+            await asyncio.Event().wait()
+
+        coordinator._with_cloud_session = blocked_session
+        monkeypatch.setattr(cm, "POST_COMMAND_REFRESH_DELAY", 0)
+        coordinator._schedule_post_command_refresh(trigger="beverage_finished")
+        cancelled_task = coordinator._post_command_refresh_task
+        await started.wait()
+        cancelled_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cancelled_task
+        assert not coordinator._command_lock.locked()
+        assert not coordinator._session_connect_lock.locked()
+        coordinator._with_cloud_session = AsyncMock()
+        coordinator._statistics_update_event.wait = AsyncMock()
+        coordinator.async_request_refresh = AsyncMock()
+        assert await coordinator.async_synchronize_statistics(automatic=True) == "completed_unverified"
+
+    asyncio.run(scenario())
