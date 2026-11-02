@@ -50,8 +50,19 @@ jobs:
           if-no-files-found: ignore
 
   home-assistant-runtime:
-    name: Home Assistant 2026.8.2 runtime
+    name: Home Assistant ${{ matrix.ha_version }} runtime
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ha_version: "2026.8.2"
+            requirements: requirements_ha_test_minimum.txt
+            type_check: false
+          - ha_version: "2026.10.4"
+            requirements: requirements_ha_test.txt
+            type_check: true
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,10 +71,22 @@ jobs:
         with:
           python-version: "3.14.2"
           cache: pip
-          cache-dependency-path: requirements_ha_test.txt
+          cache-dependency-path: ${{ matrix.requirements }}
       - name: Install Home Assistant test runtime
-        run: python -m pip install --requirement requirements_ha_test.txt
+        run: python -m pip install --requirement "${{ matrix.requirements }}"
+      - name: Verify exact Home Assistant runtime
+        env:
+          EXPECTED_HA_VERSION: ${{ matrix.ha_version }}
+        run: |
+          python - <<'PY'
+          import importlib.metadata
+          import os
+          version = importlib.metadata.version("homeassistant")
+          print(f"Home Assistant runtime: {version}")
+          assert version == os.environ["EXPECTED_HA_VERSION"]
+          PY
       - name: Run strict type checking
+        if: matrix.type_check
         run: python -m mypy custom_components/ha_delonghi_coffeelink_eletta_explore
       - name: Test against real Home Assistant interfaces
         run: python -m pytest -q -c pytest_ha.ini

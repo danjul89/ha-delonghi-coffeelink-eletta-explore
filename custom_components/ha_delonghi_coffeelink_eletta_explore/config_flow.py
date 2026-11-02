@@ -4,15 +4,21 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .ayla_client import AuthError, AylaDevice, CloudError, DelonghiAylaClient
 from .const import CONF_EMAIL, CONF_PASSWORD, DOMAIN
+
+if TYPE_CHECKING:
+    # Current HA types refer to Probatio; at runtime HA supplies the compatible
+    # voluptuous alias, which also keeps older supported releases working.
+    import probatio as vol
+else:
+    import voluptuous as vol
 
 _LOGGER = logging.getLogger(__name__)
 

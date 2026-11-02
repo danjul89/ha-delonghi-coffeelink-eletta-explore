@@ -1,0 +1,2 @@
+# Minimum supported HA; typing is checked against the current runtime instead.
+pytest-homeassistant-custom-component==0.13.356

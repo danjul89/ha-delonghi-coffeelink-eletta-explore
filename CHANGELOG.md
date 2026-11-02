@@ -6,6 +6,21 @@ All notable user-visible changes are documented here. The project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Match current Home Assistant schema types during strict static checking while
+  retaining the compatible runtime validation import used by older HA releases.
+  Resolve the binary-sensor device-class type from its current defining module
+  while retaining the public runtime import available in both HA generations.
+  No entity names, translations, protocol frames or cloud-session behavior change.
+
+### Development
+
+- Update test dependencies and verify the minimum HA 2026.8.2 and current test
+  target HA 2026.10.4 independently on Ubuntu. Add real-runtime regression
+  coverage for configuration and service schemas, and keep strict mypy enabled
+  against the current target without suppressing the newly detected errors.
+
 ## [1.3.1] - 2026-09-30
 
 ### Fixed

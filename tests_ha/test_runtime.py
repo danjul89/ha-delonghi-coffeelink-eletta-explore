@@ -6,6 +6,7 @@ import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import voluptuous as vol
 from homeassistant.config_entries import SOURCE_RECONFIGURE, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -13,9 +14,18 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.ha_delonghi_coffeelink_eletta_explore import (
+    SERVICE_RAW_SCHEMA,
+    SERVICE_START_SCHEMA,
+    SERVICE_STOP_SCHEMA,
+)
 from custom_components.ha_delonghi_coffeelink_eletta_explore.ayla_client import (
     AylaDevice,
     DelonghiAylaClient,
+)
+from custom_components.ha_delonghi_coffeelink_eletta_explore.config_flow import (
+    STEP_REAUTH_SCHEMA,
+    STEP_USER_SCHEMA,
 )
 from custom_components.ha_delonghi_coffeelink_eletta_explore.const import (
     CONF_EMAIL,
@@ -30,6 +40,29 @@ from custom_components.ha_delonghi_coffeelink_eletta_explore.dss import AylaDssM
 TEST_EMAIL = "owner@example.test"
 TEST_PASSWORD = "not-a-real-password"
 TEST_DSN = "synthetic-device-id"
+
+
+def test_validation_schemas_match_the_active_home_assistant_engine() -> None:
+    """Keep runtime validation identical before and after HA's engine migration."""
+    for schema in (STEP_USER_SCHEMA, STEP_REAUTH_SCHEMA, SERVICE_START_SCHEMA, SERVICE_STOP_SCHEMA, SERVICE_RAW_SCHEMA):
+        assert isinstance(schema, vol.Schema)
+    assert STEP_USER_SCHEMA({CONF_EMAIL: TEST_EMAIL, CONF_PASSWORD: TEST_PASSWORD}) == {
+        CONF_EMAIL: TEST_EMAIL,
+        CONF_PASSWORD: TEST_PASSWORD,
+    }
+    assert STEP_REAUTH_SCHEMA({CONF_PASSWORD: TEST_PASSWORD}) == {CONF_PASSWORD: TEST_PASSWORD}
+    assert SERVICE_START_SCHEMA({"device_id": TEST_DSN, "beverage": "espresso"}) == {
+        "device_id": [TEST_DSN],
+        "beverage": "espresso",
+    }
+    assert SERVICE_STOP_SCHEMA({"device_id": TEST_DSN}) == {"device_id": [TEST_DSN]}
+    assert SERVICE_RAW_SCHEMA({"device_id": TEST_DSN, "value_base64": "AA=="}) == {
+        "device_id": [TEST_DSN],
+        "value_base64": "AA==",
+    }
+    with pytest.raises(vol.Invalid):
+        SERVICE_START_SCHEMA({"device_id": TEST_DSN})
+
 
 if sys.platform == "win32":
     # Windows' ProactorEventLoop implements its internal wakeup pipe with a

@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import ATTR_DEVICE_ID, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -34,6 +33,13 @@ from .const import (
 from .coordinator import DelonghiCoordinator
 from .dss import AylaDssManager
 from .errors import translated_auth_error, translated_service_error
+
+if TYPE_CHECKING:
+    # Only the static checker imports the current validation engine directly.
+    # HA's runtime alias preserves compatibility with the minimum supported HA.
+    import probatio as vol
+else:
+    import voluptuous as vol
 
 _LOGGER = logging.getLogger(__name__)
 

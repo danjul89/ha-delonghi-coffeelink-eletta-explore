@@ -85,3 +85,17 @@ def test_local_markdown_links_resolve() -> None:
                 missing.append(f"{document.relative_to(ROOT)} -> {target}")
 
     assert not missing
+
+
+def test_runtime_matrix_preserves_minimum_and_current_home_assistant() -> None:
+    """A test dependency refresh must not silently drop the minimum HA runtime."""
+    workflow = yaml.safe_load((ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8"))
+    job = workflow["jobs"]["home-assistant-runtime"]
+    assert job["strategy"]["fail-fast"] is False
+    environments = job["strategy"]["matrix"]["include"]
+    minimum = json.loads((ROOT / "hacs.json").read_text(encoding="utf-8"))["homeassistant"]
+    assert {item["ha_version"] for item in environments} == {minimum, "2026.10.4"}
+    assert sum(item["type_check"] for item in environments) == 1
+    for item in environments:
+        assert (ROOT / item["requirements"]).is_file()
+        assert item["type_check"] is (item["ha_version"] != minimum)

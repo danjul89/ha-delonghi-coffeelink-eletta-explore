@@ -13,10 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
-    BinarySensorEntity,
-)
+from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -27,7 +24,13 @@ from .coordinator import DelonghiCoordinator
 from .entity import DelonghiCoordinatorEntity
 
 if TYPE_CHECKING:
+    from homeassistant.components.binary_sensor.const import BinarySensorDeviceClass
+
     from . import DelonghiConfigEntry
+else:
+    # The defining const module is absent on the minimum supported HA release.
+    # Both generations retain this public runtime export.
+    from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 
 _DECALC_PERCENT_PROPERTY = "d512_percentage_to_deca"
 

@@ -1,5 +1,14 @@
 # Compatibility and known limitations
 
+## Development validation targets
+
+The current development CI tests the actual Home Assistant 2026.8.2 and
+2026.10.4 runtimes independently on Ubuntu, including configuration, password
+reconfiguration, setup/unload and schema validation. The supported minimum
+remains 2026.8.2. Static typing follows the current target's Probatio API; the
+runtime uses HA's backwards-compatible validation import. These maintenance
+checks do not change appliance protocol behavior or broaden model support.
+
 ## Support matrix
 
 | Model/profile | Cloud channel | Status |
