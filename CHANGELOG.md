@@ -6,6 +6,22 @@ All notable user-visible changes are documented here. The project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Send Coffee Link's `0xe8 0xf0` statistics request instead of the `03 02`
+  session refresh when synchronizing statistics. On Eletta Explore the `03 02`
+  frame only republished `d302`, so beverage counters stayed frozen until the
+  official app was opened or the appliance reconnected to Wi-Fi; a week of drinks
+  then arrived as one jump. The new frame makes the appliance upload changed
+  counters within about twenty seconds, also from standby.
+
+### Added
+
+- Request a statistics snapshot when a beverage prepared at the machine finishes
+  (live monitor returns from preparing to ready), so counters follow within
+  seconds instead of waiting for the hourly sync. Diagnostics report this as the
+  `beverage_finished` trigger.
+
 ## [1.3.1] - 2026-09-30
 
 ### Fixed

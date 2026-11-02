@@ -540,6 +540,26 @@ def test_wake_validation_and_session_refresh_helpers():
     assert decoded["crc_valid"] is True
 
 
+def test_statistics_request_matches_coffee_link_capture():
+    # Synthetic session tail; byte layout identical to the app's 0xe8 frame.
+    raw = cb.build_statistics_request_command(0xC0FFEE11, timestamp=0x11223344)
+    assert raw == bytes.fromhex("0d 06 e8 f0 00 ed 7c 00 00 11 22 33 44 c0 ff ee 11")
+    assert len(base64.b64decode(cb.build_statistics_request_encoded(0xC0FFEE11))) == 17
+
+    decoded = cb.decode_command(base64.b64encode(raw).decode())
+    assert decoded["type"] == "statistics_request"
+    assert decoded["params"] == "00"
+    assert decoded["crc"] == "ed 7c"
+    assert decoded["crc_valid"] is True
+    assert decoded["timestamp"] == 0x11223344
+    assert not cb.is_wake_power_frame(decoded)
+
+    truncated = cb.decode_command(base64.b64encode(raw[:7]).decode())
+    assert truncated["type"] == "statistics_request"
+    assert truncated["crc_valid"] is True
+    assert "timestamp" not in truncated
+
+
 def test_eletta_validation_rejects_trailer_frame_without_device_signature():
     body = bytes([0x83, 0xF0, 0x01, 0x01]) + bytes.fromhex("01 02") + const.ELETTA_RECIPE_TRAILER
     frame = bytes([0x0D, len(body) + 3]) + body

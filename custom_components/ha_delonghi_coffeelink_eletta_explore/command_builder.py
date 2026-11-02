@@ -11,6 +11,7 @@ from .const import (
     BEVERAGES,
     CMD_FAMILY_BREW,
     CMD_FAMILY_POWER,
+    CMD_FAMILY_STATISTICS,
     CMD_LENGTH,
     CMD_PREFIX,
     CMD_RESPONSE_PREFIX,
@@ -21,6 +22,7 @@ from .const import (
     POWER_SESSION_REFRESH_PARAMS,
     POWER_STANDBY_PARAMS,
     POWER_WAKE_PARAMS,
+    STATISTICS_REQUEST_PARAMS,
 )
 
 _BEV_NAMES = {bev_id: display for bev_id, _key, display, _icon in BEVERAGES}
@@ -226,6 +228,23 @@ def build_session_refresh_encoded(app_id: int) -> str:
     return encode_command(build_session_refresh_command(app_id))
 
 
+def build_statistics_request_command(app_id: int, timestamp: int | None = None) -> bytes:
+    """Coffee Link statistics request (0d 06 e8 f0 00 <crc> 00 00 <ts> <session tail>).
+
+    Captured from the official app. The machine answers by uploading its changed
+    counter properties (d5xx/d7xx) about twenty seconds later, also from standby.
+    """
+    if timestamp is None:
+        timestamp = int(time.time())
+    header = bytes([CMD_PREFIX, 0x06, CMD_FAMILY_STATISTICS[0], CMD_FAMILY_STATISTICS[1]]) + STATISTICS_REQUEST_PARAMS
+    crc = crc16_aug_ccitt(header)
+    return header + crc.to_bytes(2, "big") + bytes(2) + timestamp.to_bytes(4, "big") + _session_id_to_tail_bytes(app_id)
+
+
+def build_statistics_request_encoded(app_id: int) -> str:
+    return encode_command(build_statistics_request_command(app_id))
+
+
 def validate_power_frame_b64(value_b64: str, expected_params: bytes) -> bool:
     """True if a base64 frame is a valid power command with the expected params."""
     decoded = decode_command(value_b64)
@@ -332,8 +351,9 @@ def is_wake_power_frame(decoded: dict[str, Any]) -> bool:
 def decode_command(value_b64: str) -> dict[str, Any]:
     """Decode a base64 command/response payload into a human-readable dict.
 
-    Recognises the two app->machine frame families this integration emits
-    (brew ``0x83 0xf0`` and power/wake ``0x84 0x0f``) and machine->app
+    Recognises the app->machine frame families this integration emits
+    (brew ``0x83 0xf0``, power/wake ``0x84 0x0f`` and statistics request
+    ``0xe8 0xf0``) and machine->app
     responses (prefix ``0xd0``). Unknown shapes still get a hex dump.
     """
     if not isinstance(value_b64, str) or not value_b64.strip():
@@ -395,6 +415,13 @@ def decode_command(value_b64: str) -> dict[str, Any]:
         out["crc"] = raw[6:8].hex(" ")
         out["crc_valid"] = crc16_aug_ccitt(raw[0:6]) == int.from_bytes(raw[6:8], "big")
         out["timestamp"] = int.from_bytes(raw[8:12], "big")
+    elif family == CMD_FAMILY_STATISTICS and len(raw) >= 7:
+        out["type"] = "statistics_request"
+        out["params"] = raw[4:5].hex(" ")
+        out["crc"] = raw[5:7].hex(" ")
+        out["crc_valid"] = crc16_aug_ccitt(raw[0:5]) == int.from_bytes(raw[5:7], "big")
+        if len(raw) >= 13:
+            out["timestamp"] = int.from_bytes(raw[9:13], "big")
     elif len(raw) >= 1 and raw[0] == CMD_RESPONSE_PREFIX:
         out["type"] = "machine_response"
     else:

@@ -123,6 +123,27 @@ def test_monitor_rejects_older_official_ordering_token(
     assert coordinator._monitor_ordering_token == 20
 
 
+def test_finished_beverage_schedules_statistics_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    coordinator, _client = _coordinator()
+    frames = iter(
+        [
+            {"status": 7, "step": 11, "progress_percentage": 40},  # brewing at the machine
+            {"status": 7, "step": 0, "progress_percentage": 0},  # back to ready
+            {"status": 7, "step": 0, "progress_percentage": 0},  # still ready
+            {"status": 0, "step": 2, "progress_percentage": 100},  # standby
+        ]
+    )
+    monkeypatch.setattr(cm, "parse_monitor_b64", lambda _value: next(frames))
+    monkeypatch.setattr(cm, "monitor_ordering_token", lambda _value: None)
+    schedule = Mock()
+    coordinator._schedule_post_command_refresh = schedule
+
+    for sequence in ("1", "2", "3", "4"):
+        coordinator.handle_dss_event(_dss_event(sequence=sequence, property_name="d302_monitor_machine", value="frame"))
+    schedule.assert_called_once_with(trigger="beverage_finished")
+    assert not coordinator._machine_is_ready()
+
+
 def test_dss_state_switches_polling_interval_and_refreshes_on_loss() -> None:
     async def scenario() -> None:
         coordinator, _client = _coordinator()
@@ -282,6 +303,9 @@ def test_snapshot_refresh_write_tracks_exact_ack_without_touching_command_state(
         client.async_set_property_value = AsyncMock(return_value=None)
         await coordinator._send_statistics_refresh()
         assert client.async_set_property_value.await_args.args[1] == const.COMMAND_PROPERTY_CANDIDATES[0]
+        sent = cm.decode_command(client.async_set_property_value.await_args.args[2])
+        assert sent["type"] == "statistics_request"
+        assert sent["crc_valid"] is True
         assert coordinator.last_command_result is None
 
         coordinator.command_property = "app_data_request"
@@ -424,6 +448,11 @@ def test_snapshot_refresh_timeout_falls_back_to_poll_and_post_command_uses_it(
         await coordinator._post_command_refresh_task
         coordinator.async_synchronize_statistics.assert_awaited_once_with(automatic=True, trigger="post_command")
         coordinator.async_request_refresh.assert_not_awaited()
+
+        coordinator.async_synchronize_statistics.reset_mock()
+        coordinator._schedule_post_command_refresh(trigger="beverage_finished")
+        await coordinator._post_command_refresh_task
+        coordinator.async_synchronize_statistics.assert_awaited_once_with(automatic=True, trigger="beverage_finished")
 
         coordinator.async_synchronize_statistics = AsyncMock(return_value="skipped_busy")
         coordinator._post_command_refresh_task = None
