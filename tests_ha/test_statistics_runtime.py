@@ -1,4 +1,4 @@
-"""Exercise PR16 through a loaded Eletta entry and real HA task ownership."""
+"""Exercise statistics refresh through a loaded Eletta and real HA task ownership."""
 
 from __future__ import annotations
 

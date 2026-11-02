@@ -231,8 +231,8 @@ def build_session_refresh_encoded(app_id: int) -> str:
 def build_statistics_request_command(app_id: int, timestamp: int | None = None) -> bytes:
     """Coffee Link statistics request (0d 06 e8 f0 00 <crc> 00 00 <ts> <session tail>).
 
-    Captured from the official app. The machine answers by uploading its changed
-    counter properties (d5xx/d7xx) about twenty seconds later, also from standby.
+    Matches the official app. Counter uploads may arrive later, including from
+    standby; delivery alone is not evidence of a fresh statistics snapshot.
     """
     if timestamp is None:
         timestamp = int(time.time())

@@ -11,6 +11,15 @@ checks do not change appliance protocol behavior or broaden model support.
 
 ## Support matrix
 
+The unreleased statistics candidate (planned 1.3.2-beta.1) incorporates PR #16's
+Coffee Link `0xe8 0xf0` request, a single 45-second verification deadline and
+serialized statistics requests. Its live-monitor completion trigger depends on
+observing an accepted DSS transition; hourly refresh remains the fallback.
+The byte layout matches Coffee Link 4.9.6 and automated tests cover both HA
+targets, but a backed-up beta deployment and physical statistics acceptance on
+the user's Eletta are still pending. This does not broaden model support or
+replace the published 1.3.1 release's acceptance evidence.
+
 | Model/profile | Cloud channel | Status |
 |---|---|---|
 | Eletta Explore ECAM450.65.G (`DL-striker-cb`) | EU Coffee Link/Ayla | Confirmed development and live-test target |

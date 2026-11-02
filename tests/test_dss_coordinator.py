@@ -339,6 +339,7 @@ def test_cloud_snapshot_refresh_success_skip_and_manual_error_paths() -> None:
 
         async def with_session(send: Any) -> None:
             await send()
+            coordinator.data = {"d553_water_tot_qty": {"value": 101, "data_updated_at": "new"}}
             coordinator._statistics_update_event.set()
 
         async def refresh_changed() -> None:
@@ -357,6 +358,7 @@ def test_cloud_snapshot_refresh_success_skip_and_manual_error_paths() -> None:
         client.async_set_property_value.assert_awaited_once()
 
         coordinator._statistics_update_event.set()
+        coordinator._statistics_update_event.wait = AsyncMock(side_effect=TimeoutError)
         coordinator.async_request_refresh = AsyncMock()
         assert await coordinator.async_synchronize_statistics(trigger="test") == "completed_unchanged"
 
@@ -438,7 +440,7 @@ def test_snapshot_refresh_timeout_falls_back_to_poll_and_post_command_uses_it(
         coordinator._with_cloud_session = AsyncMock()
         coordinator._statistics_update_event.wait = AsyncMock(side_effect=TimeoutError)
         coordinator.async_request_refresh = AsyncMock()
-        assert await coordinator.async_synchronize_statistics() == "completed_unchanged"
+        assert await coordinator.async_synchronize_statistics() == "completed_unverified"
         coordinator.async_request_refresh.assert_awaited_once()
 
         coordinator.async_synchronize_statistics = AsyncMock(return_value="completed_updated")

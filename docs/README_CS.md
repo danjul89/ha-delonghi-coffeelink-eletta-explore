@@ -12,7 +12,8 @@ připojené přes Coffee Link a platformu Ayla IoT.
 | Ověřený kávovar | Eletta Explore ECAM450.65.G (`DL-striker-cb`, oblast EU) |
 | Home Assistant | 2026.8.2 nebo novější |
 | Jazyky | čeština a angličtina |
-| Automatické testy | 402 izolovaných testů se 100% pokrytím + 4 testy ve skutečném HA pro každou z verzí 2026.8.2 a 2026.10.4 |
+| Vývojové testy | 464 izolovaných testů se 100% pokrytím + 5 testů ve skutečném HA pro každou z verzí 2026.8.2 a 2026.10.4 |
+| Další kandidát | plánovaná 1.3.2-beta.1; nevydaná a nenainstalovaná; fyzické ověření statistik čeká |
 | Distribuce | vlastní repozitář HACS nebo ruční instalace z vydání na GitHubu; zařazení do výchozího katalogu se posuzuje |
 
 Profil PrimaDonna Soul zůstává v kódu pro zkoušky kompatibility, neprošel však

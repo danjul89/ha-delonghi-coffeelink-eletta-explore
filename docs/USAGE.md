@@ -7,14 +7,17 @@ updates and performs a full reconciliation poll every five minutes. If the strea
 is unavailable or silent, the integration immediately resumes 30-second polling
 and reconnects in the background. On a validated Eletta cloud-session profile,
 the integration also asks the appliance for a new property snapshot 30 seconds
-after startup, once per hour and after every completed beverage, including drinks
-prepared at the machine. A refresh is
+after startup and once per hour. HA beverage commands use the guarded
+post-command refresh path; an accepted live DSS transition from preparing to
+ready schedules a refresh eight seconds later, including drinks prepared at the
+machine. If that transition is not observed, the periodic request remains the
+fallback. A refresh is
 deferred while the appliance is offline or preparing, another Home Assistant
 command is active, or a foreign Coffee Link session is visible.
 
 The disabled diagnostic button **Refresh cloud data** runs the same safe path on
 demand: claim or reuse the Coffee Link session, send Coffee Link's `0xe8`
-statistics request, wait up to ten seconds for a counter update and reconcile all
+statistics request, wait up to 45 seconds for a counter snapshot and reconcile all
 properties. It does not wake the machine or prepare a drink. See
 [Cloud snapshot refresh](CLOUD_SNAPSHOT_REFRESH.md) for the lifecycle and
 diagnostic result meanings.

@@ -1,4 +1,4 @@
-"""Independent PR16 audit probes; temporary test branch, no real appliance I/O."""
+"""Protocol and lifecycle regressions for cloud statistics; no real appliance I/O."""
 
 from __future__ import annotations
 
@@ -196,8 +196,7 @@ def test_legacy_profile_retains_read_only_refresh(monkeypatch):
     asyncio.run(scenario())
 
 
-def test_late_counter_update_reproduces_premature_unchanged_diagnostic(monkeypatch):
-    """Evidence of a timing limitation, not an acceptance assertion for a fix."""
+def test_timeout_does_not_claim_unchanged_and_late_dss_values_still_apply(monkeypatch):
 
     async def scenario():
         coordinator, _client = _coordinator("DL-striker-cb")
@@ -208,17 +207,16 @@ def test_late_counter_update_reproduces_premature_unchanged_diagnostic(monkeypat
         coordinator._with_cloud_session = AsyncMock()
         coordinator.async_request_refresh = AsyncMock()
         monkeypatch.setattr(cm, "STATISTICS_SYNC_SETTLE_DELAY", 0.001)
-        assert await coordinator.async_synchronize_statistics(automatic=True) == "completed_unchanged"
+        assert await coordinator.async_synchronize_statistics(automatic=True) == "completed_unverified"
         coordinator.handle_dss_event(_dss_event(property_name="d701_tot_bev_b", value=101))
         assert coordinator.data["d701_tot_bev_b"]["value"] == 101
-        assert coordinator.last_statistics_sync_result == "completed_unchanged"
+        assert coordinator.last_statistics_sync_result == "completed_unverified"
         assert coordinator.last_statistics_sync_snapshot_changed is False
 
     asyncio.run(scenario())
 
 
-def test_single_unrelated_counter_event_can_end_settle_before_actual_statistics(monkeypatch):
-    """A different d5 property currently satisfies the generic settle event."""
+def test_hardness_change_does_not_verify_a_statistics_snapshot(monkeypatch):
 
     async def scenario():
         coordinator, _client = _coordinator("DL-striker-cb")
@@ -232,10 +230,10 @@ def test_single_unrelated_counter_event_can_end_settle_before_actual_statistics(
 
         coordinator._with_cloud_session = unrelated_update
         coordinator.async_request_refresh = AsyncMock()
-        assert await coordinator.async_synchronize_statistics(automatic=True) == "completed_updated"
+        monkeypatch.setattr(cm, "STATISTICS_SYNC_SETTLE_DELAY", 0.001)
+        assert await coordinator.async_synchronize_statistics(automatic=True) == "completed_unverified"
         assert coordinator.data["d701_tot_bev_b"]["value"] == 100
-        # "updated" does not prove the intended drink counter changed.
-        assert coordinator.last_statistics_sync_snapshot_changed is True
+        assert coordinator.last_statistics_sync_snapshot_changed is False
 
     asyncio.run(scenario())
 
@@ -252,7 +250,7 @@ def test_real_session_guard_protects_the_new_statistics_frame(session):
         client.app_id = 0x11223344 if session == "own" else 0x55667788
         if session == "unverified":
             coordinator._fetch_app_id_live = AsyncMock(return_value=(None, False))
-        coordinator._statistics_update_event.wait = AsyncMock()
+        coordinator._statistics_update_event.wait = AsyncMock(side_effect=TimeoutError)
         coordinator.async_request_refresh = AsyncMock()
         result = await coordinator.async_synchronize_statistics(automatic=True)
         if session == "own":
@@ -292,9 +290,120 @@ def test_cancelling_inflight_finish_refresh_releases_locks_and_allows_retry(monk
             await cancelled_task
         assert not coordinator._command_lock.locked()
         assert not coordinator._session_connect_lock.locked()
+        assert not coordinator._statistics_sync_lock.locked()
         coordinator._with_cloud_session = AsyncMock()
-        coordinator._statistics_update_event.wait = AsyncMock()
+        coordinator._statistics_update_event.wait = AsyncMock(side_effect=TimeoutError)
         coordinator.async_request_refresh = AsyncMock()
         assert await coordinator.async_synchronize_statistics(automatic=True) == "completed_unverified"
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("arrival", [17, 24, 44])
+def test_delayed_counter_after_unchanged_event_is_verified_within_one_deadline(monkeypatch, arrival):
+    async def scenario():
+        coordinator, _client = _coordinator("DL-striker-cb")
+        coordinator.connected_property = "app_device_connected"
+        coordinator.has_device_signature = lambda: True
+        coordinator.monitor = {"status": 7, "step": 0}
+        timestamp = "2026-08-20T12:00:00Z"
+        coordinator.data = {"d701_tot_bev_b": {"value": 100, "data_updated_at": timestamp}}
+        coordinator._with_cloud_session = AsyncMock()
+        coordinator.async_request_refresh = AsyncMock()
+        clock = [0.0]
+        monkeypatch.setattr(cm, "monotonic", lambda: clock[0])
+
+        async def next_event():
+            first = clock[0] == 0
+            clock[0] = 10 if first else arrival
+            coordinator.handle_dss_event(
+                _dss_event(
+                    sequence="1" if first else "2",
+                    property_name="d701_tot_bev_b",
+                    value=100 if first else 101,
+                    updated_at=timestamp,
+                )
+            )
+
+        coordinator._statistics_update_event.wait = AsyncMock(side_effect=next_event)
+        assert await coordinator.async_synchronize_statistics(automatic=True) == "completed_updated"
+        assert coordinator._statistics_update_event.wait.await_count == 2
+        assert clock[0] == arrival
+        assert coordinator.last_statistics_sync_snapshot_changed is True
+        assert coordinator.data["d701_tot_bev_b"]["value"] == 101
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("observed", [False, True])
+def test_statistics_wait_stops_at_its_deadline(monkeypatch, observed):
+    async def scenario():
+        coordinator, _client = _coordinator("DL-striker-cb")
+        coordinator.data = {"d701_tot_bev_b": {"value": 100}}
+        if observed:
+            coordinator._statistics_update_event.set()
+        before = coordinator._statistics_snapshot_marker(coordinator.data)
+        coordinator._statistics_update_event.wait = AsyncMock()
+        monkeypatch.setattr(cm, "STATISTICS_SYNC_SETTLE_DELAY", 0)
+        assert await coordinator._async_wait_for_statistics_update(before) is observed
+        coordinator._statistics_update_event.wait.assert_not_awaited()
+
+    asyncio.run(scenario())
+
+
+def test_overlapping_statistics_requests_do_not_overwrite_diagnostics_or_hold_command_lock():
+    async def scenario():
+        coordinator, client = _coordinator("DL-striker-cb")
+        coordinator.connected_property = "app_device_connected"
+        coordinator.has_device_signature = lambda: True
+        coordinator.monitor = {"status": 7, "step": 0}
+        coordinator._with_cloud_session = AsyncMock()
+        coordinator.async_request_refresh = AsyncMock()
+        waiting = asyncio.Event()
+        finish = asyncio.Event()
+
+        async def wait_for_update(_before):
+            waiting.set()
+            await finish.wait()
+            return False
+
+        coordinator._async_wait_for_statistics_update = wait_for_update
+        active = asyncio.create_task(coordinator.async_synchronize_statistics(automatic=True, trigger="automatic"))
+        try:
+            await waiting.wait()
+            assert not coordinator._command_lock.locked()
+            assert await coordinator.async_synchronize_statistics(automatic=True, trigger="beverage_finished") == "skipped_busy"
+            with pytest.raises(cm.HomeAssistantError, match="still in progress"):
+                await coordinator.async_synchronize_statistics()
+            assert coordinator.statistics_sync_attempts == 1
+            assert coordinator.last_statistics_sync_result is None
+            coordinator._with_cloud_session.assert_awaited_once()
+        finally:
+            finish.set()
+            await active
+        assert coordinator.last_statistics_sync_trigger == "automatic"
+        assert not coordinator._statistics_sync_lock.locked()
+        assert coordinator.last_command_result is None
+        assert client.writes == []
+
+    asyncio.run(scenario())
+
+
+def test_poll_after_missing_dss_can_still_verify_a_changed_snapshot():
+    async def scenario():
+        coordinator, _client = _coordinator("DL-striker-cb")
+        coordinator.connected_property = "app_device_connected"
+        coordinator.has_device_signature = lambda: True
+        coordinator.monitor = {"status": 0, "step": 2}
+        coordinator.data = {"d701_tot_bev_b": {"value": 100}}
+        coordinator._with_cloud_session = AsyncMock()
+        coordinator._statistics_update_event.wait = AsyncMock(side_effect=TimeoutError)
+
+        async def reconcile():
+            coordinator.data = {"d701_tot_bev_b": {"value": 101}}
+
+        coordinator.async_request_refresh = reconcile
+        assert await coordinator.async_synchronize_statistics(automatic=True) == "completed_updated"
+        assert coordinator.last_statistics_sync_snapshot_changed is True
 
     asyncio.run(scenario())

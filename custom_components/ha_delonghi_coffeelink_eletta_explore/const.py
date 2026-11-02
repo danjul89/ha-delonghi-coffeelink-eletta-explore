@@ -20,7 +20,21 @@ DEFAULT_SCAN_INTERVAL = 30  # seconds
 DSS_FALLBACK_SCAN_INTERVAL = 300  # full reconciliation while push is healthy
 DEVICE_METADATA_REFRESH_INTERVAL = 600  # seconds
 CONNECTION_INFO_REFRESH_INTERVAL = 3600  # seconds; diagnostic only
-STATISTICS_SYNC_SETTLE_DELAY = 10  # Coffee Link waits ten seconds for the new device snapshot
+STATISTICS_SYNC_SETTLE_DELAY = 45  # bounded verification window; observed e8 responses can take 17-24 seconds
+STATISTICS_PROPERTY_PREFIXES = (
+    "d7",  # beverage, recipe-usage and per-beverage volume counters
+    "d510_",  # grounds fill
+    "d512_",  # descale usage
+    "d513_",  # filter usage
+    "d524_",  # descale alerts
+    "d550_",  # calculated water usage
+    "d552_",  # descales
+    "d553_",  # total water
+    "d554_",  # filters
+    "d555_",  # filtered water
+    "d558_",  # drinks since descale warning
+    "d580_",  # service counters on Striker
+)
 STATISTICS_SYNC_STARTUP_DELAY = 30  # let the initial poll and DSS stream settle first
 STATISTICS_SYNC_INTERVAL = 3600  # cooperative refresh; do not hold the mobile-app session continuously
 STATISTICS_SYNC_RETRY_INTERVAL = 300  # retry a skipped/failed refresh without cloud-request churn

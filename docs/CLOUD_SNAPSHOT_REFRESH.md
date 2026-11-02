@@ -20,8 +20,10 @@ water volume from depending on a later launch of the mobile app.
 - A successful request is repeated at most once per hour.
 - A completed beverage command schedules another request when the machine is no
   longer preparing.
-- A beverage prepared at the machine itself schedules a request a few seconds
-  after the live monitor returns from preparing to ready.
+- A beverage prepared at the machine itself schedules a request eight seconds
+  after an accepted live DSS monitor transition from preparing to ready. If that
+  transition is missed or DSS is unavailable, the periodic refresh remains the
+  fallback; an immediate refresh after every drink is not guaranteed.
 - A skipped or failed automatic request is eligible for retry after five minutes.
 - The integration checks the live `app_id` before claiming a session. It does not
   take over a visibly foreign session and does not maintain Coffee Link's
@@ -32,11 +34,22 @@ maker is offline, is preparing a drink, or another Home Assistant command is in
 progress. Unsupported or unsigned model profiles continue to use read-only cloud
 reconciliation without receiving this Eletta-specific frame.
 
+Only one statistics request can be in flight. Another automatic request is
+deferred without replacing the active diagnostics; a concurrent manual request
+reports that an operation is in progress. The statistics wait does not hold the
+normal appliance-command lock.
+
 ## Verification
 
-After sending the request, the integration waits up to ten seconds for a `d5*` or
-`d7*` DSS property event and then performs an authoritative full-property read.
-It compares a private digest of counter values and cloud update timestamps. The
+After sending the request, the integration waits within one 45-second deadline
+for a changed counter snapshot, then performs an authoritative full-property
+read. Responses taking 17-24 seconds were reported on an Eletta; this is not a
+guaranteed response time for every firmware. An unchanged event does not finish
+the wait early or restart the deadline. Settings such as water hardness and
+software-version properties do not count as statistics updates.
+
+The integration compares a private digest of recognized maintenance/beverage
+counter values and cloud update timestamps. The
 digest, property values, device identifier and command frame are never included
 in diagnostics.
 
@@ -48,6 +61,18 @@ Downloadable diagnostics expose only:
 - result (`completed_updated`, `completed_unchanged`, `completed_unverified`,
   `skipped_*` or `failed*`);
 - an exact DSS ACK status when the device property declares ACK support.
+
+`completed_updated` means that the observed snapshot changed; it does not prove
+that every individual counter was refreshed. `completed_unchanged` means that a
+relevant DSS publication was observed but the final snapshot stayed the same.
+`completed_unverified` means that no comparable baseline or fresh publication
+could be established within the verification window. It is not a command
+rejection and does not by itself prove the counters are stale. A device may send
+only changed values. Later DSS updates are still applied, without retrospectively
+claiming that they were caused by an earlier request. A success count measures
+completed request/reconciliation cycles, not guaranteed counter freshness.
+These verification meanings describe the Eletta appliance-request path. Legacy
+profiles perform read-only reconciliation and report the cloud comparison.
 
 These are runtime diagnostics, not Home Assistant entities, and therefore do not
 create recorder history. Automatic refresh also does not change **Last Command

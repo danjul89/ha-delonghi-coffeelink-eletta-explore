@@ -64,14 +64,17 @@ which one. Home Assistant will not take over a foreign active session.
 
 Wait for the next cooperative refresh (normally no more than one hour). To test
 immediately, temporarily enable **Refresh cloud data** and press it once. The
-button asks the appliance to republish its snapshot, waits up to ten seconds and
+button asks the appliance to republish its snapshot, waits up to 45 seconds and
 then reconciles every cloud property. It stays disabled by default because the
 automatic lifecycle normally makes manual use unnecessary.
 
 Download diagnostics and inspect `cloud_snapshot_refresh` if the value remains
 stale. `completed_updated` proves that the observed counter snapshot advanced;
-`completed_unchanged` means the request completed but the appliance published no
-different counter value or timestamp. A `skipped_*` result states the safety
+`completed_unchanged` means a relevant publication was observed but the final
+snapshot did not change. `completed_unverified` means a fresh publication or
+comparable baseline could not be established; it is not proof of stale values.
+A changed general snapshot does not guarantee freshness of every individual
+counter. A `skipped_*` result states the safety
 reason for deferral. Keep the button disabled when it is not needed.
 
 ## Grounds fill is 100% while the grounds container is OK
