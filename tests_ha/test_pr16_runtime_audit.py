@@ -84,7 +84,12 @@ async def test_loaded_eletta_statistics_frame_and_finish_task(hass: HomeAssistan
                 event_type="datapoint",
                 dsn=device.dsn,
                 property_name="d302_monitor_machine",
+                datapoint_id=None,
                 value="synthetic-monitor",
+                updated_at=None,
+                acked_at=None,
+                ack_status=None,
+                ack_message=None,
             )
             assert coordinator.handle_dss_event(event)
             await coordinator._post_command_refresh_task
