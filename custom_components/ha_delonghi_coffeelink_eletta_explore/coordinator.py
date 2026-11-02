@@ -32,6 +32,7 @@ from .command_builder import (
     build_session_refresh_encoded,
     build_standby_encoded,
     build_standby_with_session_tail_encoded,
+    build_statistics_request_encoded,
     build_wake_encoded,
     build_wake_with_session_tail_encoded,
     decode_command,
@@ -477,7 +478,12 @@ class DelonghiCoordinator(DataUpdateCoordinator[AylaProperties]):
 
         confirmation_state_changed = property_name in MONITOR_PROPERTY_CANDIDATES
         if confirmation_state_changed:
+            was_preparing = self._machine_is_preparing()
             self._update_monitor(data)
+            if was_preparing and self._machine_is_ready():
+                # Request the new counters right away instead of waiting for
+                # the hourly cooperative sync.
+                self._schedule_post_command_refresh(trigger="beverage_finished")
         if property_name in {
             self.command_property,
             self.response_property,
@@ -815,6 +821,11 @@ class DelonghiCoordinator(DataUpdateCoordinator[AylaProperties]):
         step = self.monitor.get("step", self.monitor.get("action"))
         return bool((status == 7 and step not in (None, 0)) or status in {5, 10, 11, 16, 17})
 
+    def _machine_is_ready(self) -> bool:
+        """Return true when the live monitor reports an idle, awake machine."""
+        step = self.monitor.get("step", self.monitor.get("action"))
+        return self.monitor.get("status") == 7 and step in (None, 0)
+
     def _record_statistics_sync(
         self,
         result: str,
@@ -834,9 +845,13 @@ class DelonghiCoordinator(DataUpdateCoordinator[AylaProperties]):
         return result
 
     async def _send_statistics_refresh(self) -> None:
-        """Send Coffee Link's idempotent 03 02 snapshot request without command-state side effects."""
+        """Send Coffee Link's statistics request without command-state side effects.
+
+        The 03 02 session refresh only republishes d302; Eletta firmware uploads
+        its counters only for the app's 0xe8 statistics request.
+        """
         prop = self.command_property or COMMAND_PROPERTY_CANDIDATES[0]
-        value = build_session_refresh_encoded(self._integration_app_id)
+        value = build_statistics_request_encoded(self._integration_app_id)
         self._record_sent(value)
         _LOGGER.info("Requesting a fresh cloud snapshot via %s", prop)
         result = await self.client.async_set_property_value(self.device.dsn, prop, value)
@@ -955,7 +970,7 @@ class DelonghiCoordinator(DataUpdateCoordinator[AylaProperties]):
             f"{DOMAIN}_automatic_statistics_sync_{self._device_log_id}",
         )
 
-    def _schedule_post_command_refresh(self) -> None:
+    def _schedule_post_command_refresh(self, *, trigger: str = "post_command") -> None:
         """Refresh counters after the cloud has had time to persist a command."""
         if self._post_command_refresh_task:
             self._post_command_refresh_task.cancel()
@@ -964,7 +979,7 @@ class DelonghiCoordinator(DataUpdateCoordinator[AylaProperties]):
             try:
                 await asyncio.sleep(POST_COMMAND_REFRESH_DELAY)
                 if self.profile.uses_cloud_session and not self._machine_is_preparing():
-                    result = await self.async_synchronize_statistics(automatic=True, trigger="post_command")
+                    result = await self.async_synchronize_statistics(automatic=True, trigger=trigger)
                     if result.startswith("completed_"):
                         return
                 await self.async_request_refresh()

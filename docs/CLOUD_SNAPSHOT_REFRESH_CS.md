@@ -4,8 +4,9 @@
 
 Ayla uchovává naposledy zveřejněné vlastnosti kávovaru. Dotazování i stream DSS
 čtou a urychlují změny této cloudové kopie, samy však nepožádají kávovar o nový
-snímek statistik. Coffee Link 4.9.6 během aktivní relace odesílá bezpečný a
-opakovatelný požadavek `03 02`.
+snímek statistik. Coffee Link 4.9.6 při otevření statistik odesílá požadavek
+`0xe8 0xf0`; kávovar pak nahraje změněné čítače `d5*`/`d7*`, a to i z
+pohotovostního režimu. Obnova relace `03 02` znovu zveřejní pouze `d302`.
 
 Integrace používá stejný požadavek u ověřeného profilu Eletta. Čítače, například
 využití filtru a objem vody přes vložený filtr, tak nemají záviset na pozdějším
@@ -16,6 +17,8 @@ spuštění mobilní aplikace.
 - První automatický požadavek se naplánuje 30 sekund po spuštění.
 - Po úspěchu se opakuje nejvýše jednou za hodinu.
 - Po dokončeném příkazu nápoje se provede znovu, jakmile kávovar nepřipravuje.
+- Nápoj připravený přímo na kávovaru vyvolá požadavek několik sekund poté, co
+  živý monitor přejde z přípravy do stavu připraveno.
 - Odložený nebo neúspěšný pokus lze zopakovat po pěti minutách.
 - Před převzetím relace se kontroluje živé `app_id`. Integrace nepřebírá viditelně
   cizí relaci a neudržuje 140sekundovou smyčku mobilní aplikace na popředí.

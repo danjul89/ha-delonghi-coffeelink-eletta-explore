@@ -4,8 +4,11 @@
 
 Ayla stores the most recently published appliance properties. Polling or DSS can
 read and accelerate changes in that cloud copy, but neither mechanism alone asks
-the coffee maker to publish a new statistics snapshot. Coffee Link 4.9.6 sends an
-idempotent `03 02` appliance request while its foreground session is active.
+the coffee maker to publish a new statistics snapshot. Coffee Link 4.9.6 sends a
+`0xe8 0xf0` statistics request when its statistics view is opened; the appliance
+answers by uploading its changed `d5*`/`d7*` counters, also from standby. The
+`03 02` session refresh that the app sends in the same session only republishes
+`d302` and leaves the counters untouched.
 
 The integration uses the same request cooperatively on validated Eletta
 cloud-session profiles. This prevents counters such as filter usage and filtered
@@ -17,6 +20,8 @@ water volume from depending on a later launch of the mobile app.
 - A successful request is repeated at most once per hour.
 - A completed beverage command schedules another request when the machine is no
   longer preparing.
+- A beverage prepared at the machine itself schedules a request a few seconds
+  after the live monitor returns from preparing to ready.
 - A skipped or failed automatic request is eligible for retry after five minutes.
 - The integration checks the live `app_id` before claiming a session. It does not
   take over a visibly foreign session and does not maintain Coffee Link's
@@ -39,7 +44,7 @@ Downloadable diagnostics expose only:
 
 - attempt and success counts;
 - last attempt/success UTC times;
-- trigger (`automatic`, `post_command` or `manual`);
+- trigger (`automatic`, `post_command`, `beverage_finished` or `manual`);
 - result (`completed_updated`, `completed_unchanged`, `completed_unverified`,
   `skipped_*` or `failed*`);
 - an exact DSS ACK status when the device property declares ACK support.

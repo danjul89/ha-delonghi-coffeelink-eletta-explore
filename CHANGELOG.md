@@ -14,6 +14,20 @@ All notable user-visible changes are documented here. The project follows
   while retaining the public runtime import available in both HA generations.
   No entity names, translations, protocol frames or cloud-session behavior change.
 
+- Send Coffee Link's `0xe8 0xf0` statistics request instead of the `03 02`
+  session refresh when synchronizing statistics. On Eletta Explore the `03 02`
+  frame only republished `d302`, so beverage counters stayed frozen until the
+  official app was opened or the appliance reconnected to Wi-Fi; a week of drinks
+  then arrived as one jump. The new frame makes the appliance upload changed
+  counters within about twenty seconds, also from standby.
+
+### Added
+
+- Request a statistics snapshot when a beverage prepared at the machine finishes
+  (live monitor returns from preparing to ready), so counters follow within
+  seconds instead of waiting for the hourly sync. Diagnostics report this as the
+  `beverage_finished` trigger.
+
 ### Development
 
 - Update test dependencies and verify the minimum HA 2026.8.2 and current test
